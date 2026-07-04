@@ -705,7 +705,6 @@ export function GroupExpense () {
                   name: member.name.trim()
                 }))
               };
-              console.log("Sending group data:", groupData); 
               const response = await createGroup(groupData);
 
               if (response.success) {
@@ -962,8 +961,6 @@ export function GroupExpense () {
                 splits: calculatedSplits,
                 createdAt: new Date().toISOString(),
               };
-
-              console.log("Sending expense data:", expenseData);
 
               const response = await addGroupExpense(activeGroup.id, expenseData);
 

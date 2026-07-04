@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 
 export default function NavItem({ icon, label, active, onClick }) {
   const handleClick = () => {
-    console.log(`NavItem clicked: ${label}`);
     onClick?.();
   };
 

@@ -25,7 +25,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CreateAccountDrawer } from "@/components/create-account-drawer";
 import { cn } from "@/lib/utils";
 import { createBulkTransactions, createTransaction, importStatementTransactions, updateTransaction } from "@/actions/transaction";
 import { transactionSchema } from "@/app/lib/schema";
@@ -98,8 +97,7 @@ export function AddTransactionForm({
       amount: parseFloat(data.amount),
     };
 
-    console.log(formData)
-   if (editMode) {
+    if (editMode) {
       transactionFn(editId, formData);
     } else {
       transactionFn(formData);
@@ -113,7 +111,6 @@ export function AddTransactionForm({
         amount: parseFloat(t.amount),
         accountId: t.accountId || defaultAccountId,
       }));
-      console.log(formattedTransactions)
       bulkTransactionFn(formattedTransactions);
 
   };
@@ -121,7 +118,6 @@ export function AddTransactionForm({
   const handleScanComplete = (scannedData) => {
     if (scannedData) {
       setIsImporting(false);
-      console.log(scannedData);
       setValue("amount", scannedData.amount.toString());
       setValue("date", new Date(scannedData.date));
       if (scannedData.description) {
@@ -172,7 +168,6 @@ export function AddTransactionForm({
         }
       });
       // Update local state to reflect changes
-      console.log("final", importedStatement)
       setImportedTransactions([...importedStatement]);
       toast.success("Transactions imported successfully");
     }
@@ -350,11 +345,6 @@ export function AddTransactionForm({
                                   {account.name} (₹{parseFloat(account.balance).toFixed(2)})
                                 </SelectItem>
                               ))}
-                              {/* <CreateAccountDrawer>
-                                <Button variant="ghost" className="w-full text-left text-sm">
-                                  + Create Account
-                                </Button>
-                              </CreateAccountDrawer> */}
                             </SelectContent>
                           </Select>
                         </div>
@@ -468,11 +458,6 @@ export function AddTransactionForm({
                         {account.name} (₹{parseFloat(account.balance).toFixed(2)})
                       </SelectItem>
                     ))}
-                    {/* <CreateAccountDrawer>
-                      <Button variant="ghost" className="w-full text-left text-sm">
-                        + Create Account
-                      </Button>
-                    </CreateAccountDrawer> */}
                   </SelectContent>
                 </Select>
                 {errors.accountId && <p className="text-sm text-red-500">{errors.accountId.message}</p>}

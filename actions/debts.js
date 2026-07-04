@@ -141,10 +141,7 @@ export async function getDebtSummary() {
       )
     }));
 
-    // Log for debugging
-    console.log("Debt summary before returning:", summaryArray);
-
-    return { 
+    return {
       success: true, 
       summary: summaryArray
     };
@@ -235,7 +232,6 @@ export async function updateDebt(id, data) {
 export async function createGroup(groupData) {
   try {
     const userId = await getUserId();
-    console.log("Creating group with data:", groupData); // Debug log
 
     // Check if db is defined
     if (!db) {
@@ -260,7 +256,6 @@ export async function createGroup(groupData) {
       }
     });
 
-    console.log("Created group:", group); // Debug log
     revalidatePath("/borrow");
     return { success: true, group };
   } catch (error) {

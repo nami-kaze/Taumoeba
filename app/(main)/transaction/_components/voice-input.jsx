@@ -76,8 +76,6 @@ export function VoiceInput({ onVoiceInput }) {
         }
       }
 
-      console.log("Detected amount:", amount);
-
       // Process category
       const commonCategories = {
         // Income categories
@@ -172,7 +170,6 @@ export function VoiceInput({ onVoiceInput }) {
       recognitionInstance.lang = 'en-US';
 
       recognitionInstance.onstart = () => {
-        console.log("Speech recognition started");
         setIsListening(true);
         processingRef.current = false;
       };
@@ -208,7 +205,6 @@ export function VoiceInput({ onVoiceInput }) {
       };
 
       recognitionInstance.onend = () => {
-        console.log("Speech recognition ended");
         if (!processingRef.current) {
           const textToProcess = finalTranscript || transcript;
           if (textToProcess) {
