@@ -264,12 +264,6 @@ export async function createGroup(groupData) {
   }
 }
 
-// Add these helper functions at the top of the file
-const serializeAmount = (obj) => ({
-  ...obj,
-  amount: obj.amount.toNumber(),
-});
-
 const formatDate = (date) => {
   if (!date) return null;
   return new Date(date).toISOString();

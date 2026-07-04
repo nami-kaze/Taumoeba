@@ -6,13 +6,9 @@ import { revalidatePath } from "next/cache";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import aj from "@/lib/arcjet";
 import { request } from "@arcjet/next";
+import { serializeAmount } from "@/lib/serialize";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const serializeAmount = (obj) => ({
-  ...obj,
-  amount: obj.amount.toNumber(),
-});
 
 async function findSimilarTransactionCategory(description, userId) {
   // Look for the most recent transaction with a similar description

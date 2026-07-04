@@ -5,17 +5,7 @@ import { db } from "@/lib/prisma";
 import { request } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-
-const serializeTransaction = (obj) => {
-  const serialized = { ...obj };
-  if (obj.balance) {
-    serialized.balance = obj.balance.toNumber();
-  }
-  if (obj.amount) {
-    serialized.amount = obj.amount.toNumber();
-  }
-  return serialized;
-};
+import { serializeDecimal } from "@/lib/serialize";
 
 export async function getUserAccounts() {
   const { userId } = await auth();
@@ -43,7 +33,7 @@ export async function getUserAccounts() {
     });
 
     // Serialize accounts before sending to client
-    const serializedAccounts = accounts.map(serializeTransaction);
+    const serializedAccounts = accounts.map(serializeDecimal);
 
     return serializedAccounts;
   } catch (error) {
@@ -125,7 +115,7 @@ export async function createAccount(data) {
     });
 
     // Serialize the account before returning
-    const serializedAccount = serializeTransaction(account);
+    const serializedAccount = serializeDecimal(account);
 
     revalidatePath("/dashboard");
     return { success: true, data: serializedAccount };
@@ -152,7 +142,7 @@ export async function getDashboardData() {
     orderBy: { date: "desc" },
   });
 
-  return transactions.map(serializeTransaction);
+  return transactions.map(serializeDecimal);
 }
 
 export async function updateAccount(id, data) {
@@ -199,7 +189,7 @@ export async function updateAccount(id, data) {
     });
 
     // Serialize the account before returning
-    const serializedAccount = serializeTransaction(account);
+    const serializedAccount = serializeDecimal(account);
 
     revalidatePath("/dashboard");
     return { success: true, data: serializedAccount };
