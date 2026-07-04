@@ -69,8 +69,8 @@ Monies is a comprehensive financial management platform designed to help you tak
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/monies.git
-   cd monies
+   git clone https://github.com/yourusername/taumoeba.git
+   cd taumoeba
    ```
 
 2. Install dependencies:

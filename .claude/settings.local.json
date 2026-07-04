@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(git add *)",
-      "Bash(git -c user.name=cleanup -c user.email=cleanup@local commit -q -m 'Layer 3a: extract shared serializers into lib/serialize.js *)"
-    ]
-  }
-}
