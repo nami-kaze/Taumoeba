@@ -17,9 +17,9 @@ model User {
   transactions  Transaction[]
   accounts      Account[]
   budgets       Budget[]
-  debts         Debt[]    // Add relation to debts
-  groups        Group[]        // Add this field
-  groupMemberships GroupMember[]  // Add this field
+  debts            Debt[]
+  groups           Group[]
+  groupMemberships GroupMember[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -30,7 +30,7 @@ model Account {
   id           String        @id @default(uuid())
   name         String
   type         AccountType
-  balance      Decimal       @default(0) // will ask inital balance while creating an account
+  balance      Decimal       @default(0) // initial balance is set when creating an account
   isDefault    Boolean       @default(false)
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

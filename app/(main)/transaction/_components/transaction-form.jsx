@@ -28,7 +28,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { createBulkTransactions, createTransaction, importStatementTransactions, updateTransaction } from "@/actions/transaction";
 import { transactionSchema } from "@/app/lib/schema";
-import { ReceiptScanner } from "./recipt-scanner";
+import { ReceiptScanner } from "./receipt-scanner";
 import { defaultCategories } from "@/data/categories";
 import { StatementScanner } from "./statement-scanner";
 import { VoiceInput } from "./voice-input";
