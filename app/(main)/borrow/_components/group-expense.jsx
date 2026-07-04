@@ -1,6 +1,6 @@
 import React from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { createGroup, getGroups, addGroupExpense, settleSplit, deleteGroupExpense, updateGroupExpense, deleteGroup } from "@/actions/debts";
+import { createGroup, getGroups, addGroupExpense, settleSplit, deleteGroupExpense, updateGroupExpense, updateGroup, deleteGroup } from "@/actions/groups";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
