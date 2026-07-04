@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  clerkUserId   String    @unique // clerk user id
+  email         String    @unique
+  name          String?
+  imageUrl      String?
+  transactions  Transaction[]
+  accounts      Account[]
+  budgets       Budget[]
+  debts         Debt[]    // Add relation to debts
+  groups        Group[]        // Add this field
+  groupMemberships GroupMember[]  // Add this field
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id           String        @id @default(uuid())
+  name         String
+  type         AccountType
+  balance      Decimal       @default(0) // will ask inital balance while creating an account
+  isDefault    Boolean       @default(false)
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                String            @id @default(uuid())
+  type             TransactionType
+  amount           Decimal
+  description      String?
+  date             DateTime
+  category         String           
+  receiptUrl       String?
+  isRecurring      Boolean           @default(false)
+  recurringInterval RecurringInterval? // Only used if isRecurring is true
+  nextRecurringDate DateTime?         // Next date for recurring transaction
+  lastProcessed    DateTime?         // Last time this recurring transaction was processed
+  status           TransactionStatus  @default(COMPLETED)
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId        String
+  account          Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
+  @@map("transactions")
+}
+
+
+model Budget {
+  id          String       @id @default(uuid())
+  amount      Decimal
+  lastAlertSent DateTime?  // Track when the last alert was sent
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@map("budgets")
+}
+
+model Debt {
+  id          String    @id @default(uuid())
+  amount      Decimal   // Positive means person owes user, negative means user owes person
+  personName  String    // Name of the person involved in the debt
+  userId      String    // The user who created this debt record
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([personName]) // Index for faster lookups by person name
+  @@map("debts")
+}
+
+model Group {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  createdById String        // User who created the group
+  createdBy   User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  expenses    GroupExpense[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([createdById])
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  userId    String   // Reference to User if they are registered
+  name      String   // Name of the member (used even if they're not registered)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  expenses  GroupExpense[] @relation("PaidBy")
+  splits    ExpenseSplit[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([groupId])
+  @@map("group_members")
+}
+
+model GroupExpense {
+  id          String         @id @default(uuid())
+  description String
+  amount      Decimal
+  groupId     String
+  group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidById    String
+  paidBy      GroupMember    @relation("PaidBy", fields: [paidById], references: [id], onDelete: Cascade)
+  splits      ExpenseSplit[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([groupId])
+  @@index([paidById])
+  @@map("group_expenses")
+}
+
+model ExpenseSplit {
+  id          String      @id @default(uuid())
+  amount      Decimal
+  expenseId   String
+  expense     GroupExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      GroupMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  isSettled   Boolean     @default(false)
+  settledAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([expenseId])
+  @@index([memberId])
+  @@map("expense_splits")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum AccountType {
+  CURRENT
+  SAVINGS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum RecurringInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
