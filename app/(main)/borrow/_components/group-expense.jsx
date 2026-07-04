@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { UserPlus, Trash2, Edit2, Check, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
+import { calculateSplits } from "./group-split-utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Select,
@@ -49,53 +50,21 @@ export function GroupExpense () {
   });
   const [newMember, setNewMember] = useState("");
 
-  // Add this state near your other states
   const [fadingSettlements, setFadingSettlements] = useState(new Set());
 
-  // Add these new state variables near your other state declarations (around line 50)
   const [editingExpense, setEditingExpense] = useState(null);
   const [showEditExpenseForm, setShowEditExpenseForm] = useState(false);
 
-  // Add these near your other state declarations
   const [showEditGroupForm, setShowEditGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
 
-  // Add these new states after your existing state declarations
+  // Pagination, search, filter and sort state for the expense list
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all"); // "all", "paid", "received"
   const [filterMember, setFilterMember] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest"); // "newest", "oldest", "amount-high", "amount-low"
   const ITEMS_PER_PAGE = 5;
-
-  // First, let's modify the calculateSplits function to ensure it always returns properly formatted data
-  const calculateSplits = (amount, splitType, splits, members) => {
-    if (!amount || !members?.length) return [];
-
-    if (splitType === "equal") {
-      const equalShare = parseFloat(amount) / members.length;
-      return members.map(member => ({
-        id: member.id,
-        name: member.name,
-        amount: parseFloat(equalShare.toFixed(2)) // Round to 2 decimal places
-      }));
-    }
-
-    if (splitType === "percentage") {
-      return splits.map(split => ({
-        id: split.id,
-        name: members.find(m => m.id === split.id)?.name,
-        amount: parseFloat(((parseFloat(amount) * parseFloat(split.value)) / 100).toFixed(2))
-      }));
-    }
-
-    // For exact amounts
-    return splits.map(split => ({
-      id: split.id,
-      name: members.find(m => m.id === split.id)?.name,
-      amount: parseFloat(parseFloat(split.value).toFixed(2))
-    }));
-  };
 
   useEffect(() => {
     fetchGroups();
@@ -154,7 +123,6 @@ export function GroupExpense () {
     return updatedGroup;
   };
 
-  // Add this helper function to handle automatic settlements
   const handleAutoSettlements = async (expenses) => {
     try {
       // Create a map of reciprocal splits
@@ -214,7 +182,6 @@ export function GroupExpense () {
     }
   };
 
-  // Add these functions before the return statement
   const getFilteredExpenses = () => {
     if (!activeGroup?.expenses) return [];
     let expenses = [...activeGroup.expenses];
@@ -279,7 +246,6 @@ export function GroupExpense () {
     }
   };
 
-  // Add this with your other useEffect hooks
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterType, filterMember, sortOrder]);
