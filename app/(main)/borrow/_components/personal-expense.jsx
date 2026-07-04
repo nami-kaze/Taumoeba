@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { useEffect, useState } from "react"
 import { createDebt, getDebtSummary, deleteDebt, updateDebt } from "@/actions/debts"
+import { formatCurrency } from "@/lib/utils"
 
 
 
@@ -335,7 +336,7 @@ useEffect(() => {
                         item.total < 0 ? "text-green-500" : "text-red-500"
                       }`}
                     >
-                      ₹{Math.abs(item.total).toFixed(2)}
+                      {formatCurrency(Math.abs(item.total))}
                     </p>
                   </div>
                 </CardContent>

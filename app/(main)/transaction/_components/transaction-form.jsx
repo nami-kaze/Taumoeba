@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { createBulkTransactions, createTransaction, importStatementTransactions, updateTransaction } from "@/actions/transaction";
 import { transactionSchema } from "@/app/lib/schema";
 import { ReceiptScanner } from "./receipt-scanner";
@@ -342,7 +342,7 @@ export function AddTransactionForm({
                             <SelectContent>
                               {accounts.map((account) => (
                                 <SelectItem key={account.id} value={account.id}>
-                                  {account.name} (₹{parseFloat(account.balance).toFixed(2)})
+                                  {account.name} ({formatCurrency(account.balance)})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -455,7 +455,7 @@ export function AddTransactionForm({
                   <SelectContent>
                     {accounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
-                        {account.name} (₹{parseFloat(account.balance).toFixed(2)})
+                        {account.name} ({formatCurrency(account.balance)})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { UserPlus, Trash2, Edit2, Check, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { formatCurrency } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Select,
@@ -594,7 +595,7 @@ export function GroupExpense () {
                                   </div>
                                 </div>
                                 <div className="font-semibold text-lg">
-                                  ₹{totalUnsettledAmount.toFixed(2)}
+                                  {formatCurrency(totalUnsettledAmount)}
                                 </div>
                                 <div className="flex items-center gap-4">
                                   <div className="flex items-center gap-2">

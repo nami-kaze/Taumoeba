@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import useFetch from "@/hooks/use-fetch";
+import { formatCurrency } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -159,7 +160,7 @@ export function AccountCard({ account }) {
         <Link href={`/account/${id}`}>
           <CardContent>
             <div className="text-2xl font-bold">
-              ₹{parseFloat(balance).toFixed(2)}
+              {formatCurrency(balance)}
             </div>
             <p className="text-xs text-muted-foreground">
               {type.charAt(0) + type.slice(1).toLowerCase()} Account

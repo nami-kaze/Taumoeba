@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
@@ -161,7 +161,7 @@ export function DashboardOverview({ accounts, transactions }) {
                       ) : (
                         <ArrowUpRight className="mr-1 h-4 w-4" />
                       )}
-                      ₹{transaction.amount.toFixed(2)}
+                      {formatCurrency(transaction.amount)}
                     </div>
                   </div>
                 </div>
@@ -200,10 +200,9 @@ export function DashboardOverview({ accounts, transactions }) {
           : `(Selected Range)`}
       </p>
       <p className="text-lg font-semibold">
-        ₹
-        {filteredExpenses
-          .reduce((sum, t) => sum + t.amount, 0)
-          .toFixed(2)}
+        {formatCurrency(
+          filteredExpenses.reduce((sum, t) => sum + t.amount, 0)
+        )}
       </p>
     </div>
 
@@ -298,7 +297,7 @@ export function DashboardOverview({ accounts, transactions }) {
       </Pie>
 
       <Tooltip
-        formatter={(value) => `₹${value.toFixed(2)}`}
+        formatter={(value) => formatCurrency(value)}
         contentStyle={{
           backgroundColor: "hsl(var(--popover))",
           border: "1px solid hsl(var(--border))",

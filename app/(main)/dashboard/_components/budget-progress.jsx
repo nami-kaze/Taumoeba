@@ -5,6 +5,7 @@ import { Pencil, Check, X } from "lucide-react";
 import useFetch from "@/hooks/use-fetch";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
+import { formatCurrency } from "@/lib/utils";
 
 import {
   Card,
@@ -160,8 +161,8 @@ export function BudgetProgress({
               <>
                 <CardDescription>
                   {budget
-                    ? `₹${expenses.toFixed(2)} of ₹${budget.amount.toFixed(
-                        2
+                    ? `${formatCurrency(expenses)} of ${formatCurrency(
+                        budget.amount
                       )} spent`
                     : "No budget set"}
                 </CardDescription>

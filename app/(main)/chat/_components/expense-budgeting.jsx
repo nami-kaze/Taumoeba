@@ -9,6 +9,7 @@ import { getFinancialAdvice, analyzeExpenses } from "@/actions/chat";
 import { toast } from "sonner";
 import { useAuth } from "@clerk/nextjs";
 import { useChatScroll } from "./use-chat-scroll";
+import { formatCurrency } from "@/lib/utils";
 
 export default function ExpenseBudgeting({ messages, setMessages }) {
   const [inputMessage, setInputMessage] = useState("");
@@ -44,7 +45,7 @@ export default function ExpenseBudgeting({ messages, setMessages }) {
         setMessages(prev => [
           prev[0], // Keep the welcome message
           {
-            text: `💰 Your top expense: ${analysis.highestCategory.name} (₹${analysis.highestCategory.amount.toFixed(2)}).`,
+            text: `💰 Your top expense: ${analysis.highestCategory.name} (${formatCurrency(analysis.highestCategory.amount)}).`,
             isAi: true
           }
         ]);
