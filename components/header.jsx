@@ -64,12 +64,12 @@ const Header = async () => {
                 <span className="hidden md:inline">Chat with Fina</span>
               </Button>
             </Link>
-            <Link href="/borrow">
+            {/* <Link href="/borrow">
               <Button className="flex items-center gap-2">
                 <NotebookPen size={18} />
                 <span className="hidden md:inline">Settle Debt</span>
               </Button>
-            </Link>
+            </Link> */}
           </SignedIn>
           <SignedOut>
             <SignInButton forceRedirectUrl="/dashboard">
