@@ -3,10 +3,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GEMINI_MODEL } from "@/lib/gemini";
 
 // Initialize the API with the correct model name
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
 export async function getFinancialAdvice(message, transactionHistory = null) {
   try {

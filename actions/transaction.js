@@ -7,6 +7,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import aj from "@/lib/arcjet";
 import { request } from "@arcjet/next";
 import { serializeAmount } from "@/lib/serialize";
+import { GEMINI_MODEL } from "@/lib/gemini";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -374,7 +375,7 @@ export async function scanReceipt(file) {
   if (!userId) throw new Error("Unauthorized");
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -441,7 +442,7 @@ export async function importStatementTransactions(file){
   if (!userId) throw new Error("Unauthorized");
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
