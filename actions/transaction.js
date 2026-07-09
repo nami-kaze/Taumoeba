@@ -10,6 +10,9 @@ import { serializeAmount } from "@/lib/serialize";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Intervals supported by the Prisma RecurringInterval enum.
+const VALID_RECURRING_INTERVALS = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
+
 async function findSimilarTransactionCategory(description, userId) {
   // Look for the most recent transaction with a similar description
   // Using a simple case-insensitive contains match
@@ -187,14 +190,19 @@ export async function createBulkTransactions(transactions) {
       // Process each batch
       for (const batch of batches) {
         const batchResult = await tx.transaction.createMany({
-          data: batch.map((transaction) => ({
-            ...transaction,
-            userId: user.id,
-            nextRecurringDate:
-              transaction.isRecurring && transaction.recurringInterval
-                ? calculateNextRecurringDate(transaction.date, transaction.recurringInterval)
-                : null,
-          })),
+          data: batch.map((transaction) => {
+            // `account` (a name string from the AI import) is not a scalar
+            // column on Transaction — drop it so Prisma doesn't reject the row.
+            const { account, ...txnData } = transaction;
+            return {
+              ...txnData,
+              userId: user.id,
+              nextRecurringDate:
+                txnData.isRecurring && txnData.recurringInterval
+                  ? calculateNextRecurringDate(txnData.date, txnData.recurringInterval)
+                  : null,
+            };
+          }),
         });
         createdTransactions.push(batchResult);
       }
@@ -276,9 +284,9 @@ export async function updateTransaction(id, data) {
     const newBalanceChange =
       data.type === "EXPENSE" ? -data.amount : data.amount;
 
-    const netBalanceChange = newBalanceChange - oldBalanceChange;
+    const accountChanged = originalTransaction.accountId !== data.accountId;
 
-    // Update transaction and account balance in a transaction
+    // Update transaction and account balance(s) in a transaction
     const transaction = await db.$transaction(async (tx) => {
       const updated = await tx.transaction.update({
         where: {
@@ -294,15 +302,24 @@ export async function updateTransaction(id, data) {
         },
       });
 
-      // Update account balance
-      await tx.account.update({
-        where: { id: data.accountId },
-        data: {
-          balance: {
-            increment: netBalanceChange,
-          },
-        },
-      });
+      if (accountChanged) {
+        // Revert the original transaction's effect on the old account...
+        await tx.account.update({
+          where: { id: originalTransaction.accountId },
+          data: { balance: { decrement: oldBalanceChange } },
+        });
+        // ...and apply the new transaction's effect on the new account.
+        await tx.account.update({
+          where: { id: data.accountId },
+          data: { balance: { increment: newBalanceChange } },
+        });
+      } else {
+        // Same account: apply only the net difference.
+        await tx.account.update({
+          where: { id: data.accountId },
+          data: { balance: { increment: newBalanceChange - oldBalanceChange } },
+        });
+      }
 
       return updated;
     });
@@ -351,6 +368,11 @@ export async function getUserTransactions(query = {}) {
 
 // Scan Receipt
 export async function scanReceipt(file) {
+  // Guard the AI endpoint: only authenticated users may spend Gemini quota.
+  // Placed before the try so the reason isn't masked by the generic catch.
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -413,6 +435,11 @@ export async function scanReceipt(file) {
 }
 
 export async function importStatementTransactions(file){
+  // Guard the AI endpoint: only authenticated users may spend Gemini quota.
+  // Placed before the try so the reason isn't masked by the generic catch.
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -453,7 +480,7 @@ export async function importStatementTransactions(file){
       - date (YYYY-MM-DD)
       - description (String) (Don't include particulars as description, Insight meaningful info from Particulars and give as Description. No transaction id as description allowed!!)
       - isRecurring (Boolean, default: false)
-      - recurringInterval (One of: DAILY, WEEKLY, BI_WEEKLY, MONTHLY, QUARTERLY, YEARLY, or null. Only set if isRecurring is true)
+      - recurringInterval (STRICTLY one of: DAILY, WEEKLY, MONTHLY, YEARLY, or null. Only set if isRecurring is true)
       - nextRecurringDate (YYYY-MM-DD or null. Only set if isRecurring is true)
 
       Only respond with valid JSON in this exact format:
@@ -498,16 +525,25 @@ export async function importStatementTransactions(file){
 
     try {
       const transactions = JSON.parse(cleanedText);
-      return transactions.map(txn => ({
-        type: txn.type.toUpperCase(),
-        amount: parseFloat(txn.amount),
-        account: txn.account,
-        category: txn.category.toLowerCase(),
-        date: new Date(txn.date),
-        description: txn.description,
-        isRecurring: txn.isRecurring || false,
-        recurringInterval: txn.isRecurring ? txn.recurringInterval?.toUpperCase() : null,
-      }));
+      return transactions.map(txn => {
+        // Only intervals supported by the RecurringInterval enum are valid.
+        const interval = txn.recurringInterval?.toUpperCase();
+        const validInterval = VALID_RECURRING_INTERVALS.includes(interval)
+          ? interval
+          : null;
+        const isRecurring = Boolean(txn.isRecurring) && validInterval !== null;
+
+        return {
+          type: txn.type?.toUpperCase(),
+          amount: parseFloat(txn.amount),
+          account: txn.account,
+          category: txn.category?.toLowerCase(),
+          date: new Date(txn.date),
+          description: txn.description,
+          isRecurring,
+          recurringInterval: isRecurring ? validInterval : null,
+        };
+      });
     } catch (parseError) {
       console.error("Error parsing JSON response:", parseError);
       console.error("Raw AI Response:", text);
@@ -536,6 +572,9 @@ function calculateNextRecurringDate(startDate, interval) {
     case "YEARLY":
       date.setFullYear(date.getFullYear() + 1);
       break;
+    default:
+      // Unknown/unsupported interval — don't fabricate a schedule.
+      return null;
   }
 
   return date;
