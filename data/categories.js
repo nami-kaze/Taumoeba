@@ -18,7 +18,7 @@ export const defaultCategories = [
     id: "investments",
     name: "Investments",
     type: "INCOME",
-    color: "#6366f1", // indigo-500
+    color: "#63d2f1", // indigo-500
     icon: "TrendingUp",
   },
   {
@@ -34,6 +34,13 @@ export const defaultCategories = [
     type: "INCOME",
     color: "#f59e0b", // amber-500
     icon: "Home",
+  },
+  {
+    id: "banking-income",
+    name: "Banking",
+    type: "INCOME",
+    color: "#10b981", // emerald-500
+    icon: "Landmark",    
   },
   {
     id: "other-income",
@@ -151,6 +158,13 @@ export const defaultCategories = [
     color: "#fb7185", // rose-400
     icon: "Receipt",
     subcategories: ["Bank Fees", "Late Fees", "Service Charges"],
+  },
+  {
+    id: "banking-expense",
+    name: "Banking",
+    type: "EXPENSE",
+    color: "#eab308", // yellow-500
+    icon: "Landmark",
   },
   {
     id: "other-expense",

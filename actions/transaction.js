@@ -198,10 +198,11 @@ export async function createBulkTransactions(transactions) {
             return {
               ...txnData,
               userId: user.id,
-              nextRecurringDate:
-                txnData.isRecurring && txnData.recurringInterval
-                  ? calculateNextRecurringDate(txnData.date, txnData.recurringInterval)
-                  : null,
+              // Bulk-imported transactions are never recurring — force the
+              // flag off regardless of what the caller/AI supplied.
+              isRecurring: false,
+              recurringInterval: null,
+              nextRecurringDate: null,
             };
           }),
         });
