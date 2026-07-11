@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "./ui/button";
-import { PenBox, LayoutDashboard, BotMessageSquare, NotebookPen } from "lucide-react";
+import { PenBox, LayoutDashboard, BotMessageSquare, NotebookPen, FileDown } from "lucide-react";
 import Link from "next/link";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import { checkUser } from "@/lib/checkUser";
@@ -62,6 +62,12 @@ const Header = async () => {
               <Button className="flex items-center gap-2">
                 <BotMessageSquare size={18} />
                 <span className="hidden md:inline">Chat with Fina</span>
+              </Button>
+            </Link>
+            <Link href="/itr-buddy">
+              <Button variant="outline" className="flex items-center gap-2">
+                <FileDown size={18} />
+                <span className="hidden md:inline">ITR Buddy</span>
               </Button>
             </Link>
             {/* <Link href="/borrow">

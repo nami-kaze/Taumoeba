@@ -167,6 +167,13 @@ export const defaultCategories = [
     icon: "Landmark",
   },
   {
+    id: "investments-expense",
+    name: "Investments",
+    type: "EXPENSE",
+    color: "#5bb2cb", // indigo-500
+    icon: "TrendingDown",
+  },
+  {
     id: "other-expense",
     name: "Other Expenses",
     type: "EXPENSE",
