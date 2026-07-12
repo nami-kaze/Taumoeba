@@ -7,7 +7,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import aj from "@/lib/arcjet";
 import { request } from "@arcjet/next";
 import { serializeAmount } from "@/lib/serialize";
-import { GEMINI_MODEL } from "@/lib/gemini";
+import { GEMINI_MODEL, getFriendlyAIError } from "@/lib/gemini";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -432,7 +432,10 @@ export async function scanReceipt(file) {
     }
   } catch (error) {
     console.error("Error scanning receipt:", error);
-    throw new Error("Failed to scan receipt");
+    // Surface the real cause (429/quota, bad API key, etc.) to the UI toast.
+    throw new Error(
+      getFriendlyAIError(error, "Couldn't scan the receipt. Please try again with a clearer image.")
+    );
   }
 }
 
@@ -553,7 +556,10 @@ export async function importStatementTransactions(file){
     }
   } catch (error) {
     console.error("Error importing transactions:", error);
-    throw new Error("Failed to import transactions");
+    // Surface the real cause (429/quota, bad API key, etc.) to the UI toast.
+    throw new Error(
+      getFriendlyAIError(error, "Couldn't import the statement. Please try again.")
+    );
   }
 }
 

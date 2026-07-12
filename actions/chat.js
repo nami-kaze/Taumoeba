@@ -3,7 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { GEMINI_MODEL } from "@/lib/gemini";
+import { GEMINI_MODEL, getFriendlyAIError } from "@/lib/gemini";
 
 // Initialize the API with the correct model name
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -41,7 +41,10 @@ export async function getFinancialAdvice(message, transactionHistory = null) {
       return response.text();
     } catch (error) {
       console.error("Gemini API Error:", error);
-      throw new Error("Unable to generate financial advice at the moment. Please try again later.");
+      // Surface the real cause (429/quota, bad API key, etc.) to the UI toast.
+      throw new Error(
+        getFriendlyAIError(error, "Unable to generate financial advice at the moment. Please try again later.")
+      );
     }
   } catch (error) {
     console.error("Error in getFinancialAdvice:", error);
@@ -133,7 +136,10 @@ VERY IMPORTANT:
       };
     } catch (error) {
       console.error("Gemini API Error:", error);
-      throw new Error("Unable to generate expense analysis advice at the moment. Please try again later.");
+      // Surface the real cause (429/quota, bad API key, etc.) to the UI toast.
+      throw new Error(
+        getFriendlyAIError(error, "Unable to generate expense analysis advice at the moment. Please try again later.")
+      );
     }
   } catch (error) {
     console.error("Error in analyzeExpenses:", error);
