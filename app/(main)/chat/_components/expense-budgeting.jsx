@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send, Loader2 } from "lucide-react";
 import ChatMessage from "./chat-message";
-import { getFinancialAdvice, analyzeExpenses } from "@/actions/chat";
+import { getFinancialAdvice, getExpenseSummary } from "@/actions/chat";
 import { toast } from "sonner";
 import { useAuth } from "@clerk/nextjs";
 import { useChatScroll } from "./use-chat-scroll";
@@ -40,7 +40,7 @@ export default function ExpenseBudgeting({ messages, setMessages }) {
     const initialize = async () => {
       setIsLoading(true);
       try {
-        const analysis = await analyzeExpenses();
+        const analysis = await getExpenseSummary();
         // Update the message with the analysis results
         setMessages(prev => [
           prev[0], // Keep the welcome message
@@ -51,7 +51,9 @@ export default function ExpenseBudgeting({ messages, setMessages }) {
         ]);
       } catch (error) {
         console.error("Error in expense analysis:", error);
-        toast.error("Failed to analyze expenses. Please try again.");
+        // Surface the server's specific reason (rate-limited, invalid key,
+        // "No expense transactions found", etc.).
+        toast.error(error.message || "Failed to analyze expenses. Please try again.");
         // Keep the welcome message if analysis fails
       } finally {
         setIsLoading(false);
@@ -78,15 +80,16 @@ export default function ExpenseBudgeting({ messages, setMessages }) {
       // Add user message immediately
       setMessages(prev => [...prev, { text: userMessage, isAi: false }]);
 
-      // Get expense analysis and AI response
-      const analysis = await analyzeExpenses();
+      // Get expense context (DB-only) and the AI response (single Gemini call)
+      const analysis = await getExpenseSummary();
       const response = await getFinancialAdvice(userMessage, analysis);
       
       // Add AI response
       setMessages(prev => [...prev, { text: response, isAi: true }]);
     } catch (error) {
       console.error("Error in chat response:", error);
-      toast.error("Failed to get response. Please try again.");
+      // Surface the server's specific reason (rate-limited, invalid key, etc.).
+      toast.error(error.message || "Failed to get response. Please try again.");
     } finally {
       setIsLoading(false);
     }

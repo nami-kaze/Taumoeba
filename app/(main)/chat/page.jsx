@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreditCard, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";

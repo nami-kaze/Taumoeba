@@ -52,7 +52,13 @@ export async function getFinancialAdvice(message, transactionHistory = null) {
   }
 }
 
-export async function analyzeExpenses() {
+// DB-only expense summary (no Gemini call). Used to show the top-spend line and
+// to give getFinancialAdvice() spending context in Expense & Budgeting mode.
+// Previously this was analyzeExpenses(), which also made a Gemini call to
+// generate advice that the UI never used — that wasted a call on every init and
+// doubled the Gemini calls per message. Keeping this pure DB avoids burning
+// quota (and 429s) for data we can compute ourselves.
+export async function getExpenseSummary() {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -76,7 +82,6 @@ export async function analyzeExpenses() {
       select: {
         amount: true,
         category: true,
-        date: true,
       },
     });
 
@@ -95,54 +100,15 @@ export async function analyzeExpenses() {
     const highestCategory = Object.entries(categoryTotals)
       .sort(([, a], [, b]) => b - a)[0];
 
-    // Calculate the date range for context
-    const dates = transactions.map(t => new Date(t.date));
-    const oldestDate = new Date(Math.min(...dates));
-    const newestDate = new Date(Math.max(...dates));
-    const monthsDiff = (newestDate.getFullYear() - oldestDate.getFullYear()) * 12 + 
-                       (newestDate.getMonth() - oldestDate.getMonth());
-    const dateRangeText = monthsDiff > 0 
-      ? `over the past ${monthsDiff + 1} months` 
-      : `this month`;
-
-    try {
-      const prompt = `As a financial advisor, provide specific advice to optimize spending in the category "${highestCategory[0]}" (₹${highestCategory[1].toFixed(2)} spent ${dateRangeText}).
-
-Format your response EXACTLY as follows:
-1. Start with a one-line observation about the spending
-2. Add a BLANK LINE after the observation
-3. Provide exactly 3 practical money-saving tips
-4. Number each tip (1, 2, 3) and ensure each tip starts on a NEW LINE
-5. Put a BLANK LINE between each numbered tip
-6. Keep each tip to 1-2 sentences maximum
-
-VERY IMPORTANT:
-- Each numbered tip MUST start on a new line
-- There MUST be a blank line between each tip
-- Do not use any markdown formatting (no *, **, #, or other symbols)
-- Keep the total response under 150 words
-- Focus on specific, actionable tips`;
-
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-
-      return {
-        categoryAnalysis: categoryTotals,
-        highestCategory: {
-          name: highestCategory[0],
-          amount: highestCategory[1],
-        },
-        advice: response.text(),
-      };
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      // Surface the real cause (429/quota, bad API key, etc.) to the UI toast.
-      throw new Error(
-        getFriendlyAIError(error, "Unable to generate expense analysis advice at the moment. Please try again later.")
-      );
-    }
+    return {
+      categoryAnalysis: categoryTotals,
+      highestCategory: {
+        name: highestCategory[0],
+        amount: highestCategory[1],
+      },
+    };
   } catch (error) {
-    console.error("Error in analyzeExpenses:", error);
+    console.error("Error in getExpenseSummary:", error);
     throw new Error(error.message || "Failed to analyze expenses. Please try again.");
   }
-} 
+}

@@ -60,7 +60,8 @@ export default function FinancialAdvice({ messages, setMessages }) {
       setMessages(prev => [...prev, { text: response, isAi: true }]);
     } catch (error) {
       console.error("Error in chat response:", error);
-      toast.error("Failed to get response. Please try again.");
+      // Surface the server's specific reason (rate-limited, invalid key, etc.).
+      toast.error(error.message || "Failed to get response. Please try again.");
     } finally {
       setIsLoading(false);
     }
