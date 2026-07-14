@@ -181,29 +181,9 @@ export async function deleteAccount(accountId) {
       throw new Error("Cannot delete the default account. Please set another account as default first.");
     }
 
-    // Delete in smaller batches to avoid timeout
-    const BATCH_SIZE = 100;
-
-    // Get total count of transactions
-    const transactionCount = await db.transaction.count({
-      where: {
-        accountId,
-        userId: user.id,
-      },
-    });
-
-    // Delete transactions in batches
-    for (let i = 0; i < transactionCount; i += BATCH_SIZE) {
-      await db.transaction.deleteMany({
-        where: {
-          accountId,
-          userId: user.id,
-        },
-        take: BATCH_SIZE,
-      });
-    }
-
-    // Finally delete the account
+    // Deleting the account cascades to its transactions (Transaction.account is
+    // onDelete: Cascade), so a single delete is enough — no manual per-row
+    // cleanup needed.
     await db.account.delete({
       where: {
         id: accountId,

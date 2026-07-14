@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -62,9 +63,11 @@ export function EditAccountDialog({ account, open, onOpenChange }) {
     }
   };
 
-  if (error) {
-    toast.error(error.message || "Failed to update account");
-  }
+  useEffect(() => {
+    if (error) {
+      toast.error(error.message || "Failed to update account");
+    }
+  }, [error]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

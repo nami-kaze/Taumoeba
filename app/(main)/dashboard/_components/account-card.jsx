@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import useFetch from "@/hooks/use-fetch";
-import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "./privacy-context";
 import {
   Card,
   CardContent,
@@ -43,6 +43,7 @@ const EditAccountDialog = dynamic(
 
 export function AccountCard({ account }) {
   const { name, type, balance, id, isDefault } = account;
+  const { formatAmount } = usePrivacy();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -160,7 +161,7 @@ export function AccountCard({ account }) {
         <Link href={`/account/${id}`}>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(balance)}
+              {formatAmount(balance)}
             </div>
             <p className="text-xs text-muted-foreground">
               {type.charAt(0) + type.slice(1).toLowerCase()} Account

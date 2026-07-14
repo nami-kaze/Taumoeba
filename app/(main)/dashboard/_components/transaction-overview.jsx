@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { usePrivacy } from "./privacy-context";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
@@ -41,6 +42,7 @@ const COLORS = [
 ];
 
 export function DashboardOverview({ accounts, transactions }) {
+  const { formatAmount } = usePrivacy();
   const [selectedAccountId, setSelectedAccountId] = useState(
     accounts.find((a) => a.isDefault)?.id || accounts[0]?.id
   );
@@ -161,7 +163,7 @@ export function DashboardOverview({ accounts, transactions }) {
                       ) : (
                         <ArrowUpRight className="mr-1 h-4 w-4" />
                       )}
-                      {formatCurrency(transaction.amount)}
+                      {formatAmount(transaction.amount)}
                     </div>
                   </div>
                 </div>
@@ -200,7 +202,7 @@ export function DashboardOverview({ accounts, transactions }) {
           : `(Selected Range)`}
       </p>
       <p className="text-lg font-semibold">
-        {formatCurrency(
+        {formatAmount(
           filteredExpenses.reduce((sum, t) => sum + t.amount, 0)
         )}
       </p>
@@ -297,7 +299,7 @@ export function DashboardOverview({ accounts, transactions }) {
       </Pie>
 
       <Tooltip
-        formatter={(value) => formatCurrency(value)}
+        formatter={(value) => formatAmount(value)}
         contentStyle={{
           backgroundColor: "hsl(var(--popover))",
           border: "1px solid hsl(var(--border))",

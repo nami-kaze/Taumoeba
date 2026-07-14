@@ -5,7 +5,7 @@ import { Pencil, Check, X } from "lucide-react";
 import useFetch from "@/hooks/use-fetch";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
-import { formatCurrency } from "@/lib/utils";
+import { usePrivacy } from "./privacy-context";
 
 import {
   Card,
@@ -32,6 +32,7 @@ export function BudgetProgress({
   transactions = [],
   accounts = []
 }) {
+  const { formatAmount } = usePrivacy();
   const [isEditing, setIsEditing] = useState(false);
   const [newBudget, setNewBudget] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -161,7 +162,7 @@ export function BudgetProgress({
               <>
                 <CardDescription>
                   {budget
-                    ? `${formatCurrency(expenses)} of ${formatCurrency(
+                    ? `${formatAmount(expenses)} of ${formatAmount(
                         budget.amount
                       )} spent`
                     : "No budget set"}
