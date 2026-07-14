@@ -335,6 +335,128 @@ export async function updateTransaction(id, data) {
   }
 }
 
+// Edit up to 5 transactions at once. Each entry in `updates` is a full
+// transaction payload plus its `id` (same shape updateTransaction expects).
+// Balances are corrected per-account using the same revert-old / apply-new
+// logic as updateTransaction, accumulated across all edits so several edits
+// touching the same account still net out correctly.
+const MAX_BULK_EDIT = 5;
+
+export async function bulkUpdateTransactions(updates) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      throw new Error("No transactions to update");
+    }
+    if (updates.length > MAX_BULK_EDIT) {
+      throw new Error(`You can edit at most ${MAX_BULK_EDIT} transactions at once`);
+    }
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+    if (!user) throw new Error("User not found");
+
+    const ids = updates.map((u) => u.id);
+    if (ids.some((id) => !id)) throw new Error("Missing transaction id");
+
+    // Fetch originals (scoped to this user) so we can revert their old effect.
+    const originals = await db.transaction.findMany({
+      where: { id: { in: ids }, userId: user.id },
+    });
+
+    if (originals.length !== updates.length) {
+      throw new Error("One or more transactions were not found");
+    }
+    const originalById = Object.fromEntries(originals.map((t) => [t.id, t]));
+
+    // Accumulate net balance change per account across every edit.
+    const accountDeltas = {};
+    const addDelta = (accountId, delta) => {
+      accountDeltas[accountId] = (accountDeltas[accountId] || 0) + delta;
+    };
+
+    const preparedUpdates = updates.map((update) => {
+      const original = originalById[update.id];
+      const amount = parseFloat(update.amount);
+      if (Number.isNaN(amount)) throw new Error("Invalid amount");
+
+      const oldEffect =
+        original.type === "EXPENSE"
+          ? -original.amount.toNumber()
+          : original.amount.toNumber();
+      const newEffect = update.type === "EXPENSE" ? -amount : amount;
+
+      if (original.accountId !== update.accountId) {
+        // Revert the old account, apply to the new account.
+        addDelta(original.accountId, -oldEffect);
+        addDelta(update.accountId, newEffect);
+      } else {
+        // Same account: apply only the net difference.
+        addDelta(update.accountId, newEffect - oldEffect);
+      }
+
+      // Only intervals supported by the RecurringInterval enum are valid.
+      const interval = update.recurringInterval?.toUpperCase();
+      const validInterval = VALID_RECURRING_INTERVALS.includes(interval)
+        ? interval
+        : null;
+      const isRecurring = Boolean(update.isRecurring) && validInterval !== null;
+
+      return {
+        id: update.id,
+        data: {
+          type: update.type,
+          amount,
+          description: update.description,
+          date: new Date(update.date),
+          accountId: update.accountId,
+          category: update.category,
+          isRecurring,
+          recurringInterval: isRecurring ? validInterval : null,
+          nextRecurringDate: isRecurring
+            ? calculateNextRecurringDate(update.date, validInterval)
+            : null,
+        },
+      };
+    });
+
+    const affectedAccountIds = new Set([
+      ...originals.map((t) => t.accountId),
+      ...updates.map((u) => u.accountId),
+    ]);
+
+    await db.$transaction(async (tx) => {
+      for (const { id, data } of preparedUpdates) {
+        await tx.transaction.update({
+          where: { id, userId: user.id },
+          data,
+        });
+      }
+
+      for (const [accountId, delta] of Object.entries(accountDeltas)) {
+        if (delta === 0) continue;
+        await tx.account.update({
+          where: { id: accountId },
+          data: { balance: { increment: delta } },
+        });
+      }
+    });
+
+    revalidatePath("/dashboard");
+    for (const accountId of affectedAccountIds) {
+      revalidatePath(`/account/${accountId}`);
+    }
+
+    return { success: true, count: preparedUpdates.length };
+  } catch (error) {
+    console.error("Bulk update error:", error);
+    throw new Error(error.message);
+  }
+}
+
 // Get User Transactions
 export async function getUserTransactions(query = {}) {
   try {

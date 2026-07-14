@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getAccountWithTransactions } from "@/actions/account";
+import { getUserAccounts } from "@/actions/dashboard";
 import { BarLoader } from "react-spinners";
 import { TransactionTable } from "../_components/transaction-table";
 import { notFound } from "next/navigation";
@@ -8,7 +9,10 @@ import { formatCurrency } from "@/lib/utils";
 
 export default async function AccountPage({ params }) {
   const {id}= await params
-  const accountData = await getAccountWithTransactions(id);
+  const [accountData, accounts] = await Promise.all([
+    getAccountWithTransactions(id),
+    getUserAccounts(),
+  ]);
 
   if (!accountData) {
     notFound();
@@ -50,7 +54,7 @@ export default async function AccountPage({ params }) {
       <Suspense
         fallback={<BarLoader className="mt-4" width={"100%"} color="#9333ea" />}
       >
-        <TransactionTable transactions={transactions} />
+        <TransactionTable transactions={transactions} accounts={accounts || []} />
       </Suspense>
     </div>
   );

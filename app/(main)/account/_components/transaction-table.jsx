@@ -6,6 +6,7 @@ import {
   ChevronUp,
   MoreHorizontal,
   Trash,
+  Pencil,
   Search,
   X,
   ChevronLeft,
@@ -54,8 +55,10 @@ import { bulkDeleteTransactions } from "@/actions/account";
 import useFetch from "@/hooks/use-fetch";
 import { BarLoader } from "react-spinners";
 import { useRouter } from "next/navigation";
+import { BulkEditDialog } from "./bulk-edit-dialog";
 
 const ITEMS_PER_PAGE = 10;
+const MAX_BULK_EDIT = 5;
 
 const RECURRING_INTERVALS = {
   DAILY: "Daily",
@@ -64,8 +67,9 @@ const RECURRING_INTERVALS = {
   YEARLY: "Yearly",
 };
 
-export function TransactionTable({ transactions }) {
+export function TransactionTable({ transactions, accounts = [] }) {
   const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState({
     field: "date",
     direction: "desc",
@@ -184,6 +188,28 @@ export function TransactionTable({ transactions }) {
     }
   }, [deleted, deleteLoading]);
 
+  // Full transaction objects for the current selection (needed by the editor).
+  const selectedTransactions = useMemo(
+    () => transactions.filter((t) => selectedIds.includes(t.id)),
+    [transactions, selectedIds]
+  );
+
+  const canBulkEdit =
+    selectedIds.length > 0 && selectedIds.length <= MAX_BULK_EDIT;
+
+  const handleBulkEdit = () => {
+    if (selectedIds.length > MAX_BULK_EDIT) {
+      toast.error(`You can edit at most ${MAX_BULK_EDIT} transactions at once`);
+      return;
+    }
+    setBulkEditOpen(true);
+  };
+
+  const handleBulkEditSaved = () => {
+    setSelectedIds([]);
+    router.refresh();
+  };
+
   const handleClearFilters = () => {
     setSearchTerm("");
     setTypeFilter("");
@@ -251,6 +277,20 @@ export function TransactionTable({ transactions }) {
           {/* Bulk Actions */}
           {selectedIds.length > 0 && (
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkEdit}
+                disabled={!canBulkEdit}
+                title={
+                  canBulkEdit
+                    ? "Edit selected transactions"
+                    : `Select at most ${MAX_BULK_EDIT} transactions to edit`
+                }
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit Selected ({selectedIds.length})
+              </Button>
               <Button
                 variant="destructive"
                 size="sm"
@@ -475,6 +515,15 @@ export function TransactionTable({ transactions }) {
           </Button>
         </div>
       )}
+
+      {/* Bulk Edit (up to 5) */}
+      <BulkEditDialog
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        transactions={selectedTransactions}
+        accounts={accounts}
+        onSaved={handleBulkEditSaved}
+      />
     </div>
   );
 }
