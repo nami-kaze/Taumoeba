@@ -90,6 +90,9 @@ export function AddTransactionForm({
 
   const [isImporting, setIsImporting] = useState(false);
   const [importedTransactions, setImportedTransactions] = useState([]);
+  // Account the current import targets - drives the post-save redirect so we
+  // don't bounce the user to the default account after importing elsewhere.
+  const [importAccountId, setImportAccountId] = useState("");
 
   const onSubmit = (data) => {
     const formData = {
@@ -111,6 +114,19 @@ export function AddTransactionForm({
         amount: parseFloat(t.amount),
         accountId: t.accountId || defaultAccountId,
       }));
+
+      // A blank/garbled amount would otherwise reach Prisma as NaN and fail
+      // with an opaque decimal error, after the AI call has already been paid for.
+      const badRow = formattedTransactions.findIndex(
+        (t) => !Number.isFinite(t.amount) || t.amount <= 0
+      );
+      if (badRow !== -1) {
+        toast.error(
+          `Transaction ${badRow + 1} has an invalid amount. Fix it before importing.`
+        );
+        return;
+      }
+
       bulkTransactionFn(formattedTransactions);
 
   };
@@ -130,23 +146,34 @@ export function AddTransactionForm({
     }
   };
 
-  const handleStatementImport = (importedStatement) => {
+  const handleStatementImport = (importedStatement, statementAccountId) => {
     if (importedStatement.length > 0) {
+      // Account chosen in the import dialog; falls back to the default account
+      // if the dialog somehow didn't supply one.
+      const targetAccountId = statementAccountId || defaultAccountId;
+
+      setImportAccountId(targetAccountId);
       setIsImporting(true);
       setImportedTransactions(importedStatement);
-  
+
       importedStatement.forEach((transaction, index) => {
         setValue(`transactions.${index}.amount`, transaction.amount.toString());
         setValue(`transactions.${index}.date`, new Date(transaction.date));
-  
+        setValue(`transactions.${index}.accountId`, targetAccountId);
+        importedStatement[index].accountId = targetAccountId;
+
         if (transaction.description) {
           setValue(`transactions.${index}.description`, transaction.description);
         }
   
         if (transaction.category) {
-          const categoryObj = defaultCategories.find(
-            (cat) => cat.name.toLowerCase() === transaction.category.toLowerCase()
-          );
+          // Match on id first - the AI is asked for ids, and several ids differ
+          // from their display name ("personal" vs "Personal Care"), which
+          // would otherwise dump them all into other-expense.
+          const incoming = transaction.category.toLowerCase();
+          const categoryObj =
+            defaultCategories.find((cat) => cat.id.toLowerCase() === incoming) ||
+            defaultCategories.find((cat) => cat.name.toLowerCase() === incoming);
   
           setValue(
             `transactions.${index}.category`,
@@ -193,6 +220,7 @@ export function AddTransactionForm({
   const handleCancelImport = () => {
     setIsImporting(false);
     setImportedTransactions([]);
+    setImportAccountId("");
     toast.success("Import canceled.");
   };
   
@@ -211,10 +239,10 @@ export function AddTransactionForm({
   useEffect(() => {
     if (bulkTransactionResult?.success && !bulkTransactionLoading) {
       toast.success(
-         "Transactions created successfully"
+        `${bulkTransactionResult.count ?? ""} transactions created successfully`.trim()
       );
       reset();
-      router.push(`/account/${defaultAccountId}`);
+      router.push(`/account/${importAccountId || defaultAccountId}`);
     }
   }, [bulkTransactionResult, bulkTransactionLoading]);
 
@@ -233,7 +261,7 @@ export function AddTransactionForm({
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-4">
               {!editMode && <ReceiptScanner onScanComplete={handleScanComplete} />}
-              {!editMode && <StatementScanner onStatementImport={handleStatementImport} />}
+              {!editMode && <StatementScanner accounts={accounts} onStatementImport={handleStatementImport} />}
               {!editMode && <VoiceInput onVoiceInput={handleVoiceInput} />}
             </div>
 
@@ -327,8 +355,11 @@ export function AddTransactionForm({
 
                           {/* Account */}
                           <Select
-                            value={accounts.find((a) => a.isDefault)?.id || accounts[0]?.id}
-                            defaultValue={getValues("accountId")}
+                            value={
+                              watch(`transactions.${index}.accountId`) ||
+                              transaction.accountId ||
+                              defaultAccountId
+                            }
                             onValueChange={(value) => {
                               setValue(`transactions.${index}.accountId`, value);
                               const updatedTransactions = [...importedTransactions];
@@ -394,7 +425,7 @@ export function AddTransactionForm({
 
             {/* Bulk Actions */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-              <Button variant="outline" onClick={handleCancelImport} className="w-full">
+              <Button type="button" variant="outline" onClick={handleCancelImport} className="w-full">
                 Cancel
               </Button>
               <Button type="button" className="w-full" disabled={bulkTransactionLoading} onClick={handleBulkAddTransactions}>
@@ -415,7 +446,7 @@ export function AddTransactionForm({
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <div className="flex flex-col sm:flex-row items-stretch gap-2 sm:gap-4">
               {!editMode && <ReceiptScanner onScanComplete={handleScanComplete} />}
-              {!editMode && <StatementScanner onStatementImport={handleStatementImport} />}
+              {!editMode && <StatementScanner accounts={accounts} onStatementImport={handleStatementImport} />}
               {!editMode && <VoiceInput onVoiceInput={handleVoiceInput} />}
             </div>
 

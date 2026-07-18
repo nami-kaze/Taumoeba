@@ -36,6 +36,38 @@ async function findSimilarTransactionCategory(description, userId) {
   return similarTransaction?.category || null;
 }
 
+// Bulk variant of findSimilarTransactionCategory. Runs ONE query for the whole
+// import instead of one per description: firing N concurrent findFirst calls
+// exhausts the Prisma connection pool (P2024), and each one is an unindexed
+// ILIKE scan over the user's entire history.
+async function buildCategoryMap(descriptions, userId) {
+  const uniqueDescriptions = [
+    ...new Set(descriptions.filter((d) => typeof d === "string" && d.trim())),
+  ];
+  if (uniqueDescriptions.length === 0) return {};
+
+  // Most recent first, so the first match per description wins - same
+  // precedence as the single-lookup path's `orderBy: { date: 'desc' }`.
+  const history = await db.transaction.findMany({
+    where: { userId, description: { not: null } },
+    orderBy: { date: "desc" },
+    select: { description: true, category: true },
+    take: 1000,
+  });
+  if (history.length === 0) return {};
+
+  const map = {};
+  for (const desc of uniqueDescriptions) {
+    const needle = desc.toLowerCase();
+    const match = history.find((h) =>
+      h.description.toLowerCase().includes(needle)
+    );
+    if (match) map[desc] = match.category;
+  }
+
+  return map;
+}
+
 // Create Transaction
 export async function createTransaction(data) {
   try {
@@ -128,6 +160,7 @@ export async function createTransaction(data) {
 }
 
 export async function createBulkTransactions(transactions) {
+  const startedAt = Date.now();
   try {
     const { userId } = await auth();
     if (!userId) throw new Error("Unauthorized");
@@ -139,30 +172,25 @@ export async function createBulkTransactions(transactions) {
     if (!user) {
       throw new Error("User not found");
     }
-    const accountId = transactions[0]?.accountId; 
-    if (!accountId) throw new Error("Invalid transactions: Missing accountId");
+    // Rows may target different accounts - the import dialog stamps one account
+    // on every row, but the user can override individual rows afterwards.
+    const accountIds = [...new Set(transactions.map((t) => t.accountId))];
+    if (accountIds.some((id) => !id)) {
+      throw new Error("Invalid transactions: Missing accountId");
+    }
 
-    const account = await db.account.findUnique({
-      where: { id: accountId, userId: user.id },
+    const accounts = await db.account.findMany({
+      where: { id: { in: accountIds }, userId: user.id },
     });
 
-    if (!account) {
+    if (accounts.length !== accountIds.length) {
       throw new Error("Account not found or unauthorized");
     }
-    
-    let newBalance = Number(account.balance);
 
-    // First, get all unique descriptions to minimize database queries
-    const uniqueDescriptions = [...new Set(transactions.map(t => t.description))];
-    
-    // Batch fetch similar categories for all unique descriptions
-    const similarCategories = await Promise.all(
-      uniqueDescriptions.map(desc => findSimilarTransactionCategory(desc, user.id))
-    );
-    
-    // Create a map of description to category for quick lookup
-    const categoryMap = Object.fromEntries(
-      uniqueDescriptions.map((desc, index) => [desc, similarCategories[index]])
+    // One query for the whole import - see buildCategoryMap.
+    const categoryMap = await buildCategoryMap(
+      transactions.map((t) => t.description),
+      user.id
     );
 
     // Enhance transactions with categories
@@ -171,60 +199,81 @@ export async function createBulkTransactions(transactions) {
       category: categoryMap[transaction.description] || transaction.category
     }));
 
-    // Calculate total balance change
-    const totalBalanceChange = enhancedTransactions.reduce((sum, transaction) => {
-      const change = transaction.type === "EXPENSE" ? -transaction.amount : transaction.amount;
-      return sum + change;
-    }, 0);
-
-    // Process transactions in smaller batches to avoid timeout
-    const BATCH_SIZE = 50;
-    const batches = [];
-    for (let i = 0; i < enhancedTransactions.length; i += BATCH_SIZE) {
-      batches.push(enhancedTransactions.slice(i, i + BATCH_SIZE));
+    // Balance delta per account, so rows pointing at different accounts each
+    // hit the right balance instead of all landing on the first row's account.
+    const balanceDeltas = {};
+    for (const transaction of enhancedTransactions) {
+      const change =
+        transaction.type === "EXPENSE" ? -transaction.amount : transaction.amount;
+      balanceDeltas[transaction.accountId] =
+        (balanceDeltas[transaction.accountId] || 0) + change;
     }
 
-    // Create transactions and update account balance with increased timeout
-    const newTransactions = await db.$transaction(async (tx) => {
-      const createdTransactions = [];
-      
-      // Process each batch
-      for (const batch of batches) {
-        const batchResult = await tx.transaction.createMany({
-          data: batch.map((transaction) => {
-            // `account` (a name string from the AI import) is not a scalar
-            // column on Transaction — drop it so Prisma doesn't reject the row.
-            const { account, ...txnData } = transaction;
-            return {
-              ...txnData,
-              userId: user.id,
-              // Bulk-imported transactions are never recurring — force the
-              // flag off regardless of what the caller/AI supplied.
-              isRecurring: false,
-              recurringInterval: null,
-              nextRecurringDate: null,
-            };
-          }),
-        });
-        createdTransactions.push(batchResult);
-      }
-
-      // Update account balance
-      await tx.account.update({
-        where: { id: accountId },
-        data: { balance: newBalance + totalBalanceChange },
-      });
-      
-      return createdTransactions;
-    }, {
-      timeout: 30000 // Increase timeout to 30 seconds
+    const rows = enhancedTransactions.map((transaction) => {
+      // `account` (a name string from the AI import) is not a scalar
+      // column on Transaction — drop it so Prisma doesn't reject the row.
+      const { account, ...txnData } = transaction;
+      return {
+        ...txnData,
+        userId: user.id,
+        // Bulk-imported transactions are never recurring — force the
+        // flag off regardless of what the caller/AI supplied.
+        isRecurring: false,
+        recurringInterval: null,
+        nextRecurringDate: null,
+      };
     });
 
-    // Revalidate dashboard and account pages
-    revalidatePath("/dashboard");
-    revalidatePath(`/account/${accountId}`);
+    // Chunked only to stay under Postgres' 65535 bind-parameter cap; at ~13
+    // columns per row this leaves plenty of headroom.
+    const BATCH_SIZE = 500;
+    const operations = [];
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      operations.push(
+        db.transaction.createMany({ data: rows.slice(i, i + BATCH_SIZE) })
+      );
+    }
 
-    return { success: true, data: newTransactions };
+    // Everything before this index is a createMany; everything after is an
+    // account update (whose raw result must not reach the client).
+    const createManyCount = operations.length;
+
+    // `increment` rather than read-then-write: the balance is computed by the
+    // database, so a concurrent write can't be silently overwritten.
+    for (const [id, delta] of Object.entries(balanceDeltas)) {
+      if (!delta) continue;
+      operations.push(
+        db.account.update({
+          where: { id },
+          data: { balance: { increment: delta } },
+        })
+      );
+    }
+
+    // Batched (array) transaction, NOT interactive: the operations are sent
+    // together instead of paying a network round trip per batch while an
+    // interactive transaction's timeout runs down.
+    const writeStarted = Date.now();
+    const results = await db.$transaction(operations);
+    console.log(
+      `[bulk] ${rows.length} rows across ${accountIds.length} account(s): ` +
+        `prep ${writeStarted - startedAt}ms, write ${Date.now() - writeStarted}ms`
+    );
+
+    // Only the createMany results ({ count }) are returned. The account.update
+    // results are raw Account rows whose Decimal `balance` is not serializable
+    // across the Server Action -> Client Component boundary.
+    const created = results
+      .slice(0, createManyCount)
+      .reduce((sum, r) => sum + r.count, 0);
+
+    // Revalidate dashboard and every account the import touched
+    revalidatePath("/dashboard");
+    for (const id of accountIds) {
+      revalidatePath(`/account/${id}`);
+    }
+
+    return { success: true, count: created };
   } catch (error) {
     console.error("Bulk transaction error:", error);
     throw new Error(error.message);
@@ -576,64 +625,48 @@ export async function importStatementTransactions(file){
     const base64String = Buffer.from(arrayBuffer).toString("base64");
 
     const prompt = `
-      Analyze this bank statement file and extract all the transactions in JSON format. 
-      Each transaction should have:
-      - type (Income/Expense)
-      - amount (Number)
-      - category (STRICTLY One of: Salary, Freelance, Investments, Business, Rental, Other-income, Housing, Transportation, Groceries, Utilities, Entertainment, Food, Shopping, Healthcare, Education, Personal, Travel, Insurance, Gift, Bills, Other-expense)
-      (If there is merchant category given already, that will be considered as superior in judging the category.)
-      {The category should be chosen smartly:
-        1. If the type is Income: the category should be chosen only from (Salary, Freelance, Investments, Business, Rental, Other-income)
+      Extract every transaction from this bank statement as a JSON array.
 
-      	2.	Pattern Matching for Keywords in Descriptions
-	        •	"paytmqr" → Merchant Payment (likely shopping, groceries, food, or services)
-	        •	"amazon","flipkart","myntra" → Shopping
-	        •	"dominos", "burgerking" → Food & Dining
-	        •	"noidametro", "uber" → Transportation
-	        •	"bookmyshow", "spotify" → Entertainment
-	        •	"hdfc/travel", "hotel","makemytrip" → Travel
-	        •	"electricity", "gasbill" → Utilities
-          •	"Spar","hypermarket","Almightly","spencers","departmental store","blinkit","bigbazaar" → Groceries
+      Emit ONLY these five fields per transaction. Emit no other keys.
+      - type: "Expense" for debits, "Income" for credits
+      - amount: number, always positive
+      - date: "YYYY-MM-DD"
+      - category: exactly one value from the lists below
+      - description: meaningful merchant/purpose text derived from the
+        particulars. Never a raw transaction id, never the raw particulars.
 
-	      3.	Regular Expressions for Merchant Name Extraction
-	        •	Identify merchants/business names within transaction details and map them to known business types.
-	      4.	Smart Categorization for UPI Transactions
-	        •	"UPIAR/XXXX/DR/MerchantName/Bank/paytmqrXXXX"
-	        •	If the transaction involves an individual (e.g., random name + UPI), classify as "personal" or "peer transfer".
-	        •	If its a known brand or QR code merchant, classify using the merchant type (food, shopping, utilities, etc.).
-	      5.	Fallback Rule
-	        •	If no clear classification is found, assign "other-expense" for debits and "other-income" for credits.    
-      }
-      - date (YYYY-MM-DD)
-      - description (String) (Don't include particulars as description, Insight meaningful info from Particulars and give as Description. No transaction id as description allowed!!)
-      - isRecurring (Boolean, default: false)
-      - recurringInterval (STRICTLY one of: DAILY, WEEKLY, MONTHLY, YEARLY, or null. Only set if isRecurring is true)
-      - nextRecurringDate (YYYY-MM-DD or null. Only set if isRecurring is true)
+      Income categories (use ONLY these exact values when type is Income):
+      salary, freelance, investments, business, rental, banking-income,
+      other-income
 
-      Only respond with valid JSON in this exact format:
+      Expense categories (use ONLY these exact values when type is Expense):
+      housing, transportation, groceries, utilities, entertainment, food,
+      shopping, healthcare, education, personal, travel, insurance, gifts,
+      bills, banking-expense, investments-expense, other-expense
+
+      Categorisation rules, in priority order:
+      1. If the statement already states a merchant category, that wins.
+      2. Keyword match on the particulars:
+         amazon/flipkart/myntra -> shopping
+         dominos/burgerking/swiggy/zomato -> food
+         noidametro/uber/ola -> transportation
+         bookmyshow/spotify/netflix -> entertainment
+         hotel/makemytrip/irctc/"hdfc travel" -> travel
+         electricity/gasbill/broadband -> utilities
+         spar/hypermarket/almightly/spencers/blinkit/bigbazaar/"departmental store" -> groceries
+      3. UPI strings (e.g. "UPIAR/XXXX/DR/MerchantName/Bank/paytmqrXXXX"):
+         extract the merchant name and categorise by merchant type. A paytmqr
+         merchant categorises by its business type; a transfer to an individual
+         person's name -> personal.
+      4. No clear match -> other-expense for debits, other-income for credits.
+
+      Respond with raw JSON only - no markdown fences, no commentary:
       [
-        {
-          "type": "Expense",
-          "amount": 500.00,
-          "account": "Bank of America - Checking",
-          "category": "Groceries",
-          "date": "2024-03-01",
-          "description": "Walmart Purchase",
-          "isRecurring": false
-        },
-        {
-          "type": "Income",
-          "amount": 2000.00,
-          "account": "Bank of America - Savings",
-          "category": "Salary",
-          "date": "2024-03-01",
-          "description": "Monthly Salary",
-          "isRecurring": true,
-          "recurringInterval": "MONTHLY"
-        }
+        {"type":"Expense","amount":500.00,"date":"2024-03-01","category":"groceries","description":"Walmart purchase"},
+        {"type":"Income","amount":2000.00,"date":"2024-03-01","category":"salary","description":"Monthly salary"}
       ]
 
-      If it's not a valid statement file, return an empty array: []
+      If this is not a valid bank statement, return exactly: []
     `;
 
     const result = await model.generateContent([
@@ -652,25 +685,15 @@ export async function importStatementTransactions(file){
 
     try {
       const transactions = JSON.parse(cleanedText);
-      return transactions.map(txn => {
-        // Only intervals supported by the RecurringInterval enum are valid.
-        const interval = txn.recurringInterval?.toUpperCase();
-        const validInterval = VALID_RECURRING_INTERVALS.includes(interval)
-          ? interval
-          : null;
-        const isRecurring = Boolean(txn.isRecurring) && validInterval !== null;
-
-        return {
-          type: txn.type?.toUpperCase(),
-          amount: parseFloat(txn.amount),
-          account: txn.account,
-          category: txn.category?.toLowerCase(),
-          date: new Date(txn.date),
-          description: txn.description,
-          isRecurring,
-          recurringInterval: isRecurring ? validInterval : null,
-        };
-      });
+      // Imported transactions are never recurring - createBulkTransactions
+      // forces those fields off - so the prompt no longer asks for them.
+      return transactions.map((txn) => ({
+        type: txn.type?.toUpperCase(),
+        amount: parseFloat(txn.amount),
+        category: txn.category?.toLowerCase(),
+        date: new Date(txn.date),
+        description: txn.description,
+      }));
     } catch (parseError) {
       console.error("Error parsing JSON response:", parseError);
       console.error("Raw AI Response:", text);
